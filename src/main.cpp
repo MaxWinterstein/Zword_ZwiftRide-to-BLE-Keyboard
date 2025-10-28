@@ -23,6 +23,13 @@ const char* ZWIFT_Unknown_CHARACTERISTIC_UUID = "00000006-19CA-4651-86E5-FA29DCD
 // BUTTON MAPPINGS
 // =============================================================================
 
+// Media key constants for better readability
+#define MEDIA_VOLUME_UP     1
+#define MEDIA_VOLUME_DOWN   2
+#define MEDIA_PREV_TRACK    3
+#define MEDIA_NEXT_TRACK    4
+#define MEDIA_PLAY_PAUSE    5
+
 // Mywoosh key mappings
 #define KEY_PAUSE       ' '   // Space = Pause
 #define KEY_HIDE_UI     'u'   // Hide/unhide UI
@@ -35,37 +42,45 @@ const char* ZWIFT_Unknown_CHARACTERISTIC_UUID = "00000006-19CA-4651-86E5-FA29DCD
 #define KEY_AGAIN       '5'   // Again emote
 #define KEY_BATTERY_LOW '6'   // Battery low emote
 #define KEY_THUMBS_UP   '7'   // Thumbs up emote
-#define KEY_MEDIA       '<'   // Media key flag
 
-struct ButtonMapping {
-    uint8_t code;  // From pData[x]
-    char key;      // Mapped key
+enum class ActionType {
+    KEY_PRESS,
+    MEDIA_KEY
 };
 
-// Button mapping arrays
+struct ButtonMapping {
+    uint8_t code;
+    ActionType type;
+    union {
+        char key;           // For regular key presses
+        uint8_t mediaKey;   // For media keys
+    } action;
+};
+
+// Button mapping arrays with cleaner media key handling
 const ButtonMapping pData2Mappings[] = {
-    {0xFD, KEY_MEDIA},        // Left Controller Up
-    {0xF7, KEY_MEDIA},        // Left Controller Down
-    {0xFE, KEY_MEDIA},        // Left Controller Left
-    {0xFB, KEY_MEDIA},        // Left Controller Right
-    {0xEF, KEY_HELLO},        // Right Controller A Button
-    {0xBF, KEY_HIDE_UI},      // Right Controller Y Button
-    {0xDF, KEY_BATTERY_LOW},  // Right Controller B Button
+    {0xFD, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_VOLUME_UP}},      // Left Controller Up
+    {0xF7, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_VOLUME_DOWN}},    // Left Controller Down
+    {0xFE, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_PREV_TRACK}},     // Left Controller Left
+    {0xFB, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_NEXT_TRACK}},     // Left Controller Right
+    {0xEF, ActionType::KEY_PRESS, {.key = KEY_HELLO}},                 // Right Controller A Button
+    {0xBF, ActionType::KEY_PRESS, {.key = KEY_HIDE_UI}},               // Right Controller Y Button
+    {0xDF, ActionType::KEY_PRESS, {.key = KEY_BATTERY_LOW}},           // Right Controller B Button
 };
 
 const ButtonMapping pData3Mappings[] = {
-    {0xEF, KEY_MEDIA},        // Left Controller Power
-    {0xFD, KEY_SHIFT_DOWN},   // Left Controller Side Upper Button
-    {0xFB, KEY_SHIFT_DOWN},   // Left Controller Side Middle Button
-    {0xF7, KEY_SHIFT_DOWN},   // Left Controller Side Lower Button
-    {0xFE, KEY_THUMBS_UP},    // Right Controller Z Button
-    {0xDF, KEY_SHIFT_UP},     // Right Controller Side Upper Button
-    {0xBF, KEY_SHIFT_UP},     // Right Controller Side Middle Button
+    {0xEF, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_PLAY_PAUSE}},     // Left Controller Power
+    {0xFD, ActionType::KEY_PRESS, {.key = KEY_SHIFT_DOWN}},            // Left Controller Side Upper Button
+    {0xFB, ActionType::KEY_PRESS, {.key = KEY_SHIFT_DOWN}},            // Left Controller Side Middle Button
+    {0xF7, ActionType::KEY_PRESS, {.key = KEY_SHIFT_DOWN}},            // Left Controller Side Lower Button
+    {0xFE, ActionType::KEY_PRESS, {.key = KEY_THUMBS_UP}},             // Right Controller Z Button
+    {0xDF, ActionType::KEY_PRESS, {.key = KEY_SHIFT_UP}},              // Right Controller Side Upper Button
+    {0xBF, ActionType::KEY_PRESS, {.key = KEY_SHIFT_UP}},              // Right Controller Side Middle Button
 };
 
 const ButtonMapping pData4Mappings[] = {
-    {0xFD, KEY_PAUSE},        // Right Controller Power Button
-    {0xFE, KEY_SHIFT_UP},     // Right Controller Side Lower Button
+    {0xFD, ActionType::KEY_PRESS, {.key = KEY_PAUSE}},                 // Right Controller Power Button
+    {0xFE, ActionType::KEY_PRESS, {.key = KEY_SHIFT_UP}},              // Right Controller Side Lower Button
 };
 
 // =============================================================================
@@ -99,59 +114,58 @@ String notification = "";
 // =============================================================================
 
 /**
- * Find the mapped key for a given button code
+ * Find the button mapping for a given button code
  */
-char getMappedKey(const ButtonMapping* mappings, size_t size, uint8_t code) {
+const ButtonMapping* findButtonMapping(const ButtonMapping* mappings, size_t size, uint8_t code) {
     for (size_t i = 0; i < size; ++i) {
         if (mappings[i].code == code) {
-            return mappings[i].key;
+            return &mappings[i];
         }
     }
-    return 0;  // No mapping found
+    return nullptr;  // No mapping found
 }
 
 /**
- * Handle media key events (volume, track control, play/pause)
+ * Execute the action for a button mapping
  */
-void mediaKeyHandler(uint8_t position, uint8_t key) {
-    Serial.println("MediaKeyEvent");
-    
-    switch (position) {
-        case 2:
-            switch (key) {
-                case 0xFD: 
-                    bleKeyboard.write(KEY_MEDIA_VOLUME_UP);     
-                    Serial.println("Released UP");          
+void executeButtonAction(const ButtonMapping* mapping) {
+    if (!mapping) return;
+
+    shouldVibrate = true;
+
+    switch (mapping->type) {
+        case ActionType::KEY_PRESS:
+            bleKeyboard.write(mapping->action.key);
+            Serial.print("Key pressed: ");
+            Serial.println(mapping->action.key);
+            break;
+            
+        case ActionType::MEDIA_KEY:
+            switch (mapping->action.mediaKey) {
+                case MEDIA_VOLUME_UP:
+                    bleKeyboard.write(KEY_MEDIA_VOLUME_UP);
+                    Serial.println("Media: Volume Up");
                     break;
-                case 0xF7: 
-                    bleKeyboard.write(KEY_MEDIA_VOLUME_DOWN);   
-                    Serial.println("Released DOWN");        
+                case MEDIA_VOLUME_DOWN:
+                    bleKeyboard.write(KEY_MEDIA_VOLUME_DOWN);
+                    Serial.println("Media: Volume Down");
                     break;
-                case 0xFE: 
+                case MEDIA_PREV_TRACK:
                     bleKeyboard.write(KEY_MEDIA_PREVIOUS_TRACK);
-                    Serial.println("Released LEFT");        
+                    Serial.println("Media: Previous Track");
                     break;
-                case 0xFB: 
-                    bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);    
-                    Serial.println("Released RIGHT");       
+                case MEDIA_NEXT_TRACK:
+                    bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);
+                    Serial.println("Media: Next Track");
                     break;
-            }
-            shouldVibrate = true;
-            break;
-            
-        case 3:
-            switch(key) {
-                case 0xEF: 
-                    bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);     
-                    Serial.println("Released LEFT Power");    
+                case MEDIA_PLAY_PAUSE:
+                    bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
+                    Serial.println("Media: Play/Pause");
+                    break;
+                default:
+                    Serial.println("Unknown media key");
                     break;
             }
-            shouldVibrate = true;
-            break;
-            
-        case 4:
-            // No media keys currently mapped for position 4
-            shouldVibrate = true;
             break;
     }
 }
@@ -209,44 +223,26 @@ static void notifyCallback(BLERemoteCharacteristic* pRemoteCharacteristic,
     
     // Handle pData[2] button releases
     if (prevData2 != 0xFF && pData[2] == 0xFF) {
-        char mappedKey = getMappedKey(pData2Mappings, sizeof(pData2Mappings)/sizeof(ButtonMapping), prevData2);
-        if (mappedKey) {
-            if (mappedKey == KEY_MEDIA) {
-                mediaKeyHandler(2, prevData2);
-            } else {
-                bleKeyboard.write(mappedKey);
-                Serial.println(mappedKey);
-                shouldVibrate = true;
-            }
-        }
+        const ButtonMapping* mapping = findButtonMapping(pData2Mappings, 
+                                                       sizeof(pData2Mappings)/sizeof(ButtonMapping), 
+                                                       prevData2);
+        executeButtonAction(mapping);
     }
 
     // Handle pData[3] button releases
     if (prevData3 != 0xFF && pData[3] == 0xFF) {
-        char mappedKey = getMappedKey(pData3Mappings, sizeof(pData3Mappings)/sizeof(ButtonMapping), prevData3);
-        if (mappedKey) {
-            if (mappedKey == KEY_MEDIA) {
-                mediaKeyHandler(3, prevData3);
-            } else {
-                bleKeyboard.write(mappedKey);
-                Serial.println(mappedKey);
-                shouldVibrate = true;
-            }
-        }
+        const ButtonMapping* mapping = findButtonMapping(pData3Mappings, 
+                                                       sizeof(pData3Mappings)/sizeof(ButtonMapping), 
+                                                       prevData3);
+        executeButtonAction(mapping);
     }
 
     // Handle pData[4] button releases
     if (prevData4 != 0xFF && pData[4] == 0xFF) {
-        char mappedKey = getMappedKey(pData4Mappings, sizeof(pData4Mappings)/sizeof(ButtonMapping), prevData4);
-        if (mappedKey) {
-            if (mappedKey == KEY_MEDIA) {
-                mediaKeyHandler(4, prevData4);
-            } else {
-                bleKeyboard.write(mappedKey);
-                Serial.println(mappedKey);
-                shouldVibrate = true;
-            }
-        }
+        const ButtonMapping* mapping = findButtonMapping(pData4Mappings, 
+                                                       sizeof(pData4Mappings)/sizeof(ButtonMapping), 
+                                                       prevData4);
+        executeButtonAction(mapping);
     }
 
     // Save current states for next comparison
