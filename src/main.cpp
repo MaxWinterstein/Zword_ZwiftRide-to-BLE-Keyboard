@@ -3,6 +3,14 @@
 #include <BleKeyboard.h>
 
 // =============================================================================
+// VERSION AND BUILD INFO
+// =============================================================================
+
+#define FIRMWARE_VERSION "1.2.0"
+#define BUILD_DATE __DATE__
+#define BUILD_TIME __TIME__
+
+// =============================================================================
 // CONFIGURATION
 // =============================================================================
 
@@ -51,6 +59,7 @@ enum class ActionType {
 struct ButtonMapping {
     uint8_t code;
     ActionType type;
+    const char* description;  // For logging
     union {
         char key;           // For regular key presses
         uint8_t mediaKey;   // For media keys
@@ -59,28 +68,28 @@ struct ButtonMapping {
 
 // Button mapping arrays with cleaner media key handling
 const ButtonMapping pData2Mappings[] = {
-    {0xFD, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_VOLUME_UP}},      // Left Controller Up
-    {0xF7, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_VOLUME_DOWN}},    // Left Controller Down
-    {0xFE, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_PREV_TRACK}},     // Left Controller Left
-    {0xFB, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_NEXT_TRACK}},     // Left Controller Right
-    {0xEF, ActionType::KEY_PRESS, {.key = KEY_HELLO}},                 // Right Controller A Button
-    {0xBF, ActionType::KEY_PRESS, {.key = KEY_HIDE_UI}},               // Right Controller Y Button
-    {0xDF, ActionType::KEY_PRESS, {.key = KEY_BATTERY_LOW}},           // Right Controller B Button
+    {0xFD, ActionType::MEDIA_KEY, "Left Up (Volume Up)", {.mediaKey = MEDIA_VOLUME_UP}},
+    {0xF7, ActionType::MEDIA_KEY, "Left Down (Volume Down)", {.mediaKey = MEDIA_VOLUME_DOWN}},
+    {0xFE, ActionType::MEDIA_KEY, "Left Left (Previous Track)", {.mediaKey = MEDIA_PREV_TRACK}},
+    {0xFB, ActionType::MEDIA_KEY, "Left Right (Next Track)", {.mediaKey = MEDIA_NEXT_TRACK}},
+    {0xEF, ActionType::KEY_PRESS, "Right A (Hello)", {.key = KEY_HELLO}},
+    {0xBF, ActionType::KEY_PRESS, "Right Y (Hide UI)", {.key = KEY_HIDE_UI}},
+    {0xDF, ActionType::KEY_PRESS, "Right B (Battery Low)", {.key = KEY_BATTERY_LOW}},
 };
 
 const ButtonMapping pData3Mappings[] = {
-    {0xEF, ActionType::MEDIA_KEY, {.mediaKey = MEDIA_PLAY_PAUSE}},     // Left Controller Power
-    {0xFD, ActionType::KEY_PRESS, {.key = KEY_SHIFT_DOWN}},            // Left Controller Side Upper Button
-    {0xFB, ActionType::KEY_PRESS, {.key = KEY_SHIFT_DOWN}},            // Left Controller Side Middle Button
-    {0xF7, ActionType::KEY_PRESS, {.key = KEY_SHIFT_DOWN}},            // Left Controller Side Lower Button
-    {0xFE, ActionType::KEY_PRESS, {.key = KEY_THUMBS_UP}},             // Right Controller Z Button
-    {0xDF, ActionType::KEY_PRESS, {.key = KEY_SHIFT_UP}},              // Right Controller Side Upper Button
-    {0xBF, ActionType::KEY_PRESS, {.key = KEY_SHIFT_UP}},              // Right Controller Side Middle Button
+    {0xEF, ActionType::MEDIA_KEY, "Left Power (Play/Pause)", {.mediaKey = MEDIA_PLAY_PAUSE}},
+    {0xFD, ActionType::KEY_PRESS, "Left Side Upper (Shift Down)", {.key = KEY_SHIFT_DOWN}},
+    {0xFB, ActionType::KEY_PRESS, "Left Side Middle (Shift Down)", {.key = KEY_SHIFT_DOWN}},
+    {0xF7, ActionType::KEY_PRESS, "Left Side Lower (Shift Down)", {.key = KEY_SHIFT_DOWN}},
+    {0xFE, ActionType::KEY_PRESS, "Right Z (Thumbs Up)", {.key = KEY_THUMBS_UP}},
+    {0xDF, ActionType::KEY_PRESS, "Right Side Upper (Shift Up)", {.key = KEY_SHIFT_UP}},
+    {0xBF, ActionType::KEY_PRESS, "Right Side Middle (Shift Up)", {.key = KEY_SHIFT_UP}},
 };
 
 const ButtonMapping pData4Mappings[] = {
-    {0xFD, ActionType::KEY_PRESS, {.key = KEY_PAUSE}},                 // Right Controller Power Button
-    {0xFE, ActionType::KEY_PRESS, {.key = KEY_SHIFT_UP}},              // Right Controller Side Lower Button
+    {0xFD, ActionType::KEY_PRESS, "Right Power (Pause)", {.key = KEY_PAUSE}},
+    {0xFE, ActionType::KEY_PRESS, "Right Side Lower (Shift Up)", {.key = KEY_SHIFT_UP}},
 };
 
 // =============================================================================
@@ -109,6 +118,74 @@ uint8_t prevData4 = 0xFF;
 
 String notification = "";
 
+// Statistics for logging
+unsigned long startTime;
+unsigned int buttonPressCount = 0;
+unsigned int connectionAttempts = 0;
+
+// =============================================================================
+// LOGGING FUNCTIONS
+// =============================================================================
+
+/**
+ * Print startup banner with version and build information
+ */
+void printStartupBanner() {
+    Serial.println("===============================================");
+    Serial.println("          ZWORD - Zwift Ride to BLE          ");
+    Serial.println("===============================================");
+    Serial.print("Firmware Version: ");
+    Serial.println(FIRMWARE_VERSION);
+    Serial.print("Build Date: ");
+    Serial.print(BUILD_DATE);
+    Serial.print(" ");
+    Serial.println(BUILD_TIME);
+    Serial.print("ESP32 Chip ID: ");
+    Serial.println((uint32_t)ESP.getEfuseMac(), HEX);
+    Serial.print("Free Heap: ");
+    Serial.print(ESP.getFreeHeap());
+    Serial.println(" bytes");
+    Serial.print("CPU Frequency: ");
+    Serial.print(getCpuFrequencyMhz());
+    Serial.println(" MHz");
+    Serial.println("===============================================");
+    Serial.println();
+}
+
+/**
+ * Print configuration information
+ */
+void printConfiguration() {
+    Serial.println("Configuration:");
+    Serial.print("  Haptic Feedback: ");
+    Serial.println(enableHapticFeedback ? "Enabled" : "Disabled");
+    Serial.print("  Button Mappings: ");
+    Serial.print(sizeof(pData2Mappings)/sizeof(ButtonMapping) + 
+                 sizeof(pData3Mappings)/sizeof(ButtonMapping) + 
+                 sizeof(pData4Mappings)/sizeof(ButtonMapping));
+    Serial.println(" total");
+    Serial.println();
+}
+
+/**
+ * Print runtime statistics
+ */
+void printStats() {
+    unsigned long uptime = (millis() - startTime) / 1000;
+    Serial.println("Runtime Statistics:");
+    Serial.print("  Uptime: ");
+    Serial.print(uptime);
+    Serial.println(" seconds");
+    Serial.print("  Button Presses: ");
+    Serial.println(buttonPressCount);
+    Serial.print("  Connection Attempts: ");
+    Serial.println(connectionAttempts);
+    Serial.print("  Free Heap: ");
+    Serial.print(ESP.getFreeHeap());
+    Serial.println(" bytes");
+    Serial.println();
+}
+
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
@@ -131,13 +208,21 @@ const ButtonMapping* findButtonMapping(const ButtonMapping* mappings, size_t siz
 void executeButtonAction(const ButtonMapping* mapping) {
     if (!mapping) return;
 
+    buttonPressCount++;
     shouldVibrate = true;
+
+    Serial.print("[");
+    Serial.print(millis());
+    Serial.print("ms] Button: ");
+    Serial.print(mapping->description);
+    Serial.print(" -> ");
 
     switch (mapping->type) {
         case ActionType::KEY_PRESS:
             bleKeyboard.write(mapping->action.key);
-            Serial.print("Key pressed: ");
-            Serial.println(mapping->action.key);
+            Serial.print("Key '");
+            Serial.print(mapping->action.key);
+            Serial.println("'");
             break;
             
         case ActionType::MEDIA_KEY:
@@ -186,8 +271,9 @@ void vibrate() {
 
         // Send the pattern
         pRxCharacteristic->writeValue(fullPattern, sizeof(fullPattern), false);
+        Serial.println("[VIBRATE] Haptic feedback sent");
     } else {
-        Serial.println("RX characteristic not writable or not available.");
+        Serial.println("[ERROR] RX characteristic not writable or not available.");
     }
 }
 
@@ -201,10 +287,15 @@ void vibrate() {
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
 public:
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
-        Serial.println("Scanning...");
+        Serial.print("[SCAN] Found device: ");
+        Serial.print(advertisedDevice.getName().c_str());
+        Serial.print(" (");
+        Serial.print(advertisedDevice.getAddress().toString().c_str());
+        Serial.println(")");
+        
         if (advertisedDevice.haveServiceUUID() && 
             advertisedDevice.isAdvertisingService(BLEUUID(ZWIFT_CUSTOM_SERVICE_UUID))) {
-            Serial.println("Found Zwift Ride");
+            Serial.println("[SCAN] ✓ Found Zwift Ride controller!");
             BLEDevice::getScan()->stop();
             myDevice = new BLEAdvertisedDevice(advertisedDevice);
             doConnect = true;
@@ -259,52 +350,63 @@ static void notifyCallback(BLERemoteCharacteristic* pRemoteCharacteristic,
  * Connect to Zwift Ride controller and perform handshake
  */
 bool connectAndHandshakeZwiftRide() {
-    Serial.println("Starting the BLE Client...");
+    connectionAttempts++;
+    Serial.print("[CONNECT] Attempt #");
+    Serial.print(connectionAttempts);
+    Serial.println(" - Starting BLE Client...");
+    
     BLEClient* pClient = BLEDevice::createClient();
-    Serial.println("Created BLE client");
+    Serial.println("[CONNECT] Created BLE client");
 
+    Serial.print("[CONNECT] Connecting to ");
+    Serial.println(myDevice->getAddress().toString().c_str());
+    
     if (!pClient->connect(myDevice)) {
-        Serial.println("Failed to connect");
+        Serial.println("[ERROR] Failed to connect to device");
         return false;
     }
 
-    Serial.println("Connected to Service");
+    Serial.println("[CONNECT] ✓ Connected to device");
 
     // Connect to Controller Service
     BLERemoteService* pService = pClient->getService(BLEUUID(ZWIFT_CUSTOM_SERVICE_UUID));
     if (pService == nullptr) {
-        Serial.println("Service not found");
+        Serial.println("[ERROR] Zwift service not found");
         pClient->disconnect();
         return false;
     }
 
+    Serial.println("[CONNECT] ✓ Found Zwift service");
+
     // Send handshake message to RX Characteristic
-    Serial.println("Sending Handshake...");
+    Serial.println("[HANDSHAKE] Sending handshake...");
     pRxCharacteristic = pService->getCharacteristic(BLEUUID(ZWIFT_SYNC_RX_CHARACTERISTIC_UUID));
     if (pRxCharacteristic == nullptr) {
-        Serial.println("RX characteristic not found");
+        Serial.println("[ERROR] RX characteristic not found");
         pClient->disconnect();
         return false;
     }
 
     String handshakeMessage = "RideOn";
     pRxCharacteristic->writeValue(handshakeMessage.c_str(), handshakeMessage.length());
+    Serial.println("[HANDSHAKE] ✓ Sent 'RideOn' message");
 
     // Subscribe to the Async Characteristic for notifications
     pNotifyCharacteristic = pService->getCharacteristic(BLEUUID(ZWIFT_ASYNC_CHARACTERISTIC_UUID));
     if (pNotifyCharacteristic == nullptr) {
-        Serial.println("Notify characteristic not found");
+        Serial.println("[ERROR] Notify characteristic not found");
         pClient->disconnect();
         return false;
     }
 
     if (pNotifyCharacteristic->canNotify()) {
         pNotifyCharacteristic->registerForNotify(notifyCallback);
-        Serial.println("Subscribed to notifications");
+        Serial.println("[CONNECT] ✓ Subscribed to notifications");
         subscribed = true;
     }
 
     connected = true;
+    Serial.println("[CONNECT] ✓ Connection established successfully!");
     return true;
 }
 
@@ -312,6 +414,7 @@ bool connectAndHandshakeZwiftRide() {
  * Start BLE scanning for Zwift Ride controller
  */
 void startScanning() {
+    Serial.println("[SCAN] Starting BLE scan...");
     BLEScan* pScan = BLEDevice::getScan();
     pScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
     pScan->setInterval(1349);
@@ -326,9 +429,18 @@ void startScanning() {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("Starting BLE Client + HID Keyboard");
+    delay(1000); // Give serial monitor time to connect
+    
+    startTime = millis();
+    
+    // Print startup information
+    printStartupBanner();
+    printConfiguration();
 
+    Serial.println("[INIT] Initializing BLE Device...");
     BLEDevice::init("Zword");
+    
+    Serial.println("[INIT] Starting BLE Keyboard...");
     bleKeyboard.begin();
 
     // Start initial scan
@@ -337,10 +449,20 @@ void setup() {
     pScan->setInterval(1349);
     pScan->setWindow(449);
     pScan->setActiveScan(true);
+    
+    Serial.println("[INIT] Starting initial 30-second scan...");
     pScan->start(30, false);
 }
 
 void loop() {
+    static unsigned long lastStatsTime = 0;
+    
+    // Print stats every 5 minutes
+    if (millis() - lastStatsTime > 300000) {
+        printStats();
+        lastStatsTime = millis();
+    }
+    
     // Handle vibration requests
     if (shouldVibrate && enableHapticFeedback) {
         vibrate();
@@ -350,12 +472,13 @@ void loop() {
     // Handle connection requests
     if (doConnect) {
         if (connectAndHandshakeZwiftRide()) {
-            Serial.println("Connected to Controller device");
+            Serial.println("[SUCCESS] Connected to Zwift Ride controller");
             delay(500);
             vibrate(); // Initial connection vibration
             delay(2000);
             
             if (bleKeyboard.isConnected() && subscribed) {
+                Serial.println("[SUCCESS] BLE Keyboard also connected - ready to go!");
                 vibrate(); // Double vibration to confirm full setup
                 delay(500);
                 vibrate();
@@ -363,7 +486,8 @@ void loop() {
             sentMessage = true;
             doConnect = false;
         } else {
-            Serial.println("Connection failed, restarting scan...");
+            Serial.println("[RETRY] Connection failed, restarting scan in 5 seconds...");
+            delay(5000);
             startScanning();
         }
     }
