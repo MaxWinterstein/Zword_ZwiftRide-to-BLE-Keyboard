@@ -28,69 +28,84 @@ const char* ZWIFT_SYNC_TX_CHARACTERISTIC_UUID = "00000004-19CA-4651-86E5-FA29DCD
 const char* ZWIFT_Unknown_CHARACTERISTIC_UUID = "00000006-19CA-4651-86E5-FA29DCDD09D1"; // Indicate, Read, Write, Write Without Response
 
 // =============================================================================
-// BUTTON MAPPINGS
+// BUTTON CONFIGURATION
 // =============================================================================
 
-// Media key constants for better readability
-#define MEDIA_VOLUME_UP     1
-#define MEDIA_VOLUME_DOWN   2
-#define MEDIA_PREV_TRACK    3
-#define MEDIA_NEXT_TRACK    4
-#define MEDIA_PLAY_PAUSE    5
-
-// Mywoosh key mappings
-#define KEY_PAUSE       ' '   // Space = Pause
-#define KEY_HIDE_UI     'u'   // Hide/unhide UI
-#define KEY_SHIFT_DOWN  'i'   // Shift down
-#define KEY_SHIFT_UP    'k'   // Shift up
-#define KEY_PEACE       '1'   // Peace emote
-#define KEY_HELLO       '2'   // Hello emote
-#define KEY_POWER       '3'   // Power emote
-#define KEY_DAB         '4'   // Dab emote
-#define KEY_AGAIN       '5'   // Again emote
-#define KEY_BATTERY_LOW '6'   // Battery low emote
-#define KEY_THUMBS_UP   '7'   // Thumbs up emote
-
+// Action types
 enum class ActionType {
     KEY_PRESS,
     MEDIA_KEY
 };
 
-struct ButtonMapping {
-    uint8_t code;
-    ActionType type;
-    const char* description;  // For logging
+// Media key constants
+enum MediaKey {
+    VOLUME_UP = 1,
+    VOLUME_DOWN = 2,
+    PREV_TRACK = 3,
+    NEXT_TRACK = 4,
+    PLAY_PAUSE = 5
+};
+
+// Game key constants (MyWhoosh mappings)
+enum GameKey {
+    PAUSE = ' ',        // Space = Pause
+    HIDE_UI = 'u',      // Hide/unhide UI
+    SHIFT_DOWN = 'i',   // Shift down
+    SHIFT_UP = 'k',     // Shift up
+    PEACE = '1',        // Peace emote
+    HELLO = '2',        // Hello emote
+    POWER = '3',        // Power emote
+    DAB = '4',          // Dab emote
+    AGAIN = '5',        // Again emote
+    BATTERY_LOW = '6',  // Battery low emote
+    THUMBS_UP = '7'     // Thumbs up emote
+};
+
+struct ButtonConfig {
+    uint8_t dataIndex;      // Which pData array index (2, 3, or 4)
+    uint8_t code;           // Button code value
+    ActionType type;        // Key press or media key
+    const char* controller; // "Left" or "Right"
+    const char* button;     // Button name
+    const char* function;   // What it does
     union {
-        char key;           // For regular key presses
-        uint8_t mediaKey;   // For media keys
+        GameKey gameKey;
+        MediaKey mediaKey;
     } action;
 };
 
-// Button mapping arrays with cleaner media key handling
-const ButtonMapping pData2Mappings[] = {
-    {0xFD, ActionType::MEDIA_KEY, "Left Up (Volume Up)", {.mediaKey = MEDIA_VOLUME_UP}},
-    {0xF7, ActionType::MEDIA_KEY, "Left Down (Volume Down)", {.mediaKey = MEDIA_VOLUME_DOWN}},
-    {0xFE, ActionType::MEDIA_KEY, "Left Left (Previous Track)", {.mediaKey = MEDIA_PREV_TRACK}},
-    {0xFB, ActionType::MEDIA_KEY, "Left Right (Next Track)", {.mediaKey = MEDIA_NEXT_TRACK}},
-    {0xEF, ActionType::KEY_PRESS, "Right A (Hello)", {.key = KEY_HELLO}},
-    {0xBF, ActionType::KEY_PRESS, "Right Y (Hide UI)", {.key = KEY_HIDE_UI}},
-    {0xDF, ActionType::KEY_PRESS, "Right B (Battery Low)", {.key = KEY_BATTERY_LOW}},
+// =============================================================================
+// COMPLETE BUTTON MAPPING TABLE
+// =============================================================================
+// Format: {dataIndex, code, type, controller, button, function, action}
+
+const ButtonConfig BUTTON_MAPPINGS[] = {
+    // LEFT CONTROLLER - D-PAD (Media Keys)
+    {2, 0xFD, ActionType::MEDIA_KEY,  "Left", "D-Pad Up",    "Volume Up",       {.mediaKey = VOLUME_UP}},
+    {2, 0xF7, ActionType::MEDIA_KEY,  "Left", "D-Pad Down",  "Volume Down",     {.mediaKey = VOLUME_DOWN}},
+    {2, 0xFE, ActionType::MEDIA_KEY,  "Left", "D-Pad Left",  "Previous Track",  {.mediaKey = PREV_TRACK}},
+    {2, 0xFB, ActionType::MEDIA_KEY,  "Left", "D-Pad Right", "Next Track",      {.mediaKey = NEXT_TRACK}},
+
+    // LEFT CONTROLLER - POWER & SIDE BUTTONS
+    {3, 0xEF, ActionType::MEDIA_KEY,  "Left", "Power",       "Play/Pause",      {.mediaKey = PLAY_PAUSE}},
+    {3, 0xFD, ActionType::KEY_PRESS,  "Left", "Side Upper",  "Shift Down",      {.gameKey = SHIFT_DOWN}},
+    {3, 0xFB, ActionType::KEY_PRESS,  "Left", "Side Middle", "Shift Down",      {.gameKey = SHIFT_DOWN}},
+    {3, 0xF7, ActionType::KEY_PRESS,  "Left", "Side Lower",  "Shift Down",      {.gameKey = SHIFT_DOWN}},
+
+    // RIGHT CONTROLLER - ACTION BUTTONS
+    {2, 0xEF, ActionType::KEY_PRESS,  "Right", "A Button",   "Hello Emote",     {.gameKey = HELLO}},
+    {2, 0xBF, ActionType::KEY_PRESS,  "Right", "Y Button",   "Hide/Show UI",    {.gameKey = HIDE_UI}},
+    {2, 0xDF, ActionType::KEY_PRESS,  "Right", "B Button",   "Battery Low",     {.gameKey = BATTERY_LOW}},
+    {3, 0xFE, ActionType::KEY_PRESS,  "Right", "Z Button",   "Thumbs Up",       {.gameKey = THUMBS_UP}},
+
+    // RIGHT CONTROLLER - POWER & SIDE BUTTONS
+    {4, 0xFD, ActionType::KEY_PRESS,  "Right", "Power",      "Pause/Resume",    {.gameKey = PAUSE}},
+    {3, 0xDF, ActionType::KEY_PRESS,  "Right", "Side Upper", "Shift Up",        {.gameKey = SHIFT_UP}},
+    {3, 0xBF, ActionType::KEY_PRESS,  "Right", "Side Middle","Shift Up",        {.gameKey = SHIFT_UP}},
+    {4, 0xFE, ActionType::KEY_PRESS,  "Right", "Side Lower", "Shift Up",        {.gameKey = SHIFT_UP}},
 };
 
-const ButtonMapping pData3Mappings[] = {
-    {0xEF, ActionType::MEDIA_KEY, "Left Power (Play/Pause)", {.mediaKey = MEDIA_PLAY_PAUSE}},
-    {0xFD, ActionType::KEY_PRESS, "Left Side Upper (Shift Down)", {.key = KEY_SHIFT_DOWN}},
-    {0xFB, ActionType::KEY_PRESS, "Left Side Middle (Shift Down)", {.key = KEY_SHIFT_DOWN}},
-    {0xF7, ActionType::KEY_PRESS, "Left Side Lower (Shift Down)", {.key = KEY_SHIFT_DOWN}},
-    {0xFE, ActionType::KEY_PRESS, "Right Z (Thumbs Up)", {.key = KEY_THUMBS_UP}},
-    {0xDF, ActionType::KEY_PRESS, "Right Side Upper (Shift Up)", {.key = KEY_SHIFT_UP}},
-    {0xBF, ActionType::KEY_PRESS, "Right Side Middle (Shift Up)", {.key = KEY_SHIFT_UP}},
-};
-
-const ButtonMapping pData4Mappings[] = {
-    {0xFD, ActionType::KEY_PRESS, "Right Power (Pause)", {.key = KEY_PAUSE}},
-    {0xFE, ActionType::KEY_PRESS, "Right Side Lower (Shift Up)", {.key = KEY_SHIFT_UP}},
-};
+const size_t BUTTON_COUNT = sizeof(BUTTON_MAPPINGS) / sizeof(ButtonConfig);
 
 // =============================================================================
 // GLOBAL VARIABLES
@@ -153,18 +168,50 @@ void printStartupBanner() {
 }
 
 /**
+ * Print complete button configuration table
+ */
+void printButtonConfiguration() {
+    Serial.println("Button Configuration:");
+    Serial.println("┌────────────────────────────────────────────────────────────────┐");
+    Serial.println("│ Controller │    Button    │      Function      │      Type      │");
+    Serial.println("├────────────────────────────────────────────────────────────────┤");
+    
+    for (size_t i = 0; i < BUTTON_COUNT; i++) {
+        const ButtonConfig& btn = BUTTON_MAPPINGS[i];
+        
+        Serial.print("│ ");
+        Serial.printf("%-10s", btn.controller);
+        Serial.print(" │ ");
+        Serial.printf("%-12s", btn.button);
+        Serial.print(" │ ");
+        Serial.printf("%-18s", btn.function);
+        Serial.print(" │ ");
+        
+        if (btn.type == ActionType::MEDIA_KEY) {
+            Serial.printf("%-14s", "Media Key");
+        } else {
+            Serial.print("Game Key (");
+            Serial.print((char)btn.action.gameKey);
+            Serial.print(")    ");
+        }
+        Serial.println(" │");
+    }
+    
+    Serial.println("└────────────────────────────────────────────────────────────────┘");
+    Serial.print("Total Buttons Configured: ");
+    Serial.println(BUTTON_COUNT);
+    Serial.println();
+}
+
+/**
  * Print configuration information
  */
 void printConfiguration() {
     Serial.println("Configuration:");
     Serial.print("  Haptic Feedback: ");
     Serial.println(enableHapticFeedback ? "Enabled" : "Disabled");
-    Serial.print("  Button Mappings: ");
-    Serial.print(sizeof(pData2Mappings)/sizeof(ButtonMapping) + 
-                 sizeof(pData3Mappings)/sizeof(ButtonMapping) + 
-                 sizeof(pData4Mappings)/sizeof(ButtonMapping));
-    Serial.println(" total");
     Serial.println();
+    printButtonConfiguration();
 }
 
 /**
@@ -191,61 +238,65 @@ void printStats() {
 // =============================================================================
 
 /**
- * Find the button mapping for a given button code
+ * Find button configuration for given data index and code
  */
-const ButtonMapping* findButtonMapping(const ButtonMapping* mappings, size_t size, uint8_t code) {
-    for (size_t i = 0; i < size; ++i) {
-        if (mappings[i].code == code) {
-            return &mappings[i];
+const ButtonConfig* findButtonConfig(uint8_t dataIndex, uint8_t code) {
+    for (size_t i = 0; i < BUTTON_COUNT; i++) {
+        if (BUTTON_MAPPINGS[i].dataIndex == dataIndex && BUTTON_MAPPINGS[i].code == code) {
+            return &BUTTON_MAPPINGS[i];
         }
     }
-    return nullptr;  // No mapping found
+    return nullptr;
 }
 
 /**
- * Execute the action for a button mapping
+ * Execute the action for a button configuration
  */
-void executeButtonAction(const ButtonMapping* mapping) {
-    if (!mapping) return;
+void executeButtonAction(const ButtonConfig* config) {
+    if (!config) return;
 
     buttonPressCount++;
     shouldVibrate = true;
 
     Serial.print("[");
     Serial.print(millis());
-    Serial.print("ms] Button: ");
-    Serial.print(mapping->description);
+    Serial.print("ms] ");
+    Serial.print(config->controller);
+    Serial.print(" ");
+    Serial.print(config->button);
+    Serial.print(" -> ");
+    Serial.print(config->function);
     Serial.print(" -> ");
 
-    switch (mapping->type) {
+    switch (config->type) {
         case ActionType::KEY_PRESS:
-            bleKeyboard.write(mapping->action.key);
+            bleKeyboard.write((char)config->action.gameKey);
             Serial.print("Key '");
-            Serial.print(mapping->action.key);
+            Serial.print((char)config->action.gameKey);
             Serial.println("'");
             break;
             
         case ActionType::MEDIA_KEY:
-            switch (mapping->action.mediaKey) {
-                case MEDIA_VOLUME_UP:
+            switch (config->action.mediaKey) {
+                case VOLUME_UP:
                     bleKeyboard.write(KEY_MEDIA_VOLUME_UP);
-                    Serial.println("Media: Volume Up");
+                    Serial.println("KEY_MEDIA_VOLUME_UP");
                     break;
-                case MEDIA_VOLUME_DOWN:
+                case VOLUME_DOWN:
                     bleKeyboard.write(KEY_MEDIA_VOLUME_DOWN);
-                    Serial.println("Media: Volume Down");
+                    Serial.println("KEY_MEDIA_VOLUME_DOWN");
                     break;
-                case MEDIA_PREV_TRACK:
+                case PREV_TRACK:
                     bleKeyboard.write(KEY_MEDIA_PREVIOUS_TRACK);
-                    Serial.println("Media: Previous Track");
+                    Serial.println("KEY_MEDIA_PREVIOUS_TRACK");
                     break;
-                case MEDIA_NEXT_TRACK:
+                case NEXT_TRACK:
                     bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);
-                    Serial.println("Media: Next Track");
+                    Serial.println("KEY_MEDIA_NEXT_TRACK");
                     break;
-                case MEDIA_PLAY_PAUSE:
+                case PLAY_PAUSE:
                     bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
-                    Serial.println("Media: Play/Pause");
+                    Serial.println("KEY_MEDIA_PLAY_PAUSE");
                     break;
                 default:
                     Serial.println("Unknown media key");
@@ -314,26 +365,20 @@ static void notifyCallback(BLERemoteCharacteristic* pRemoteCharacteristic,
     
     // Handle pData[2] button releases
     if (prevData2 != 0xFF && pData[2] == 0xFF) {
-        const ButtonMapping* mapping = findButtonMapping(pData2Mappings, 
-                                                       sizeof(pData2Mappings)/sizeof(ButtonMapping), 
-                                                       prevData2);
-        executeButtonAction(mapping);
+        const ButtonConfig* config = findButtonConfig(2, prevData2);
+        executeButtonAction(config);
     }
 
     // Handle pData[3] button releases
     if (prevData3 != 0xFF && pData[3] == 0xFF) {
-        const ButtonMapping* mapping = findButtonMapping(pData3Mappings, 
-                                                       sizeof(pData3Mappings)/sizeof(ButtonMapping), 
-                                                       prevData3);
-        executeButtonAction(mapping);
+        const ButtonConfig* config = findButtonConfig(3, prevData3);
+        executeButtonAction(config);
     }
 
     // Handle pData[4] button releases
     if (prevData4 != 0xFF && pData[4] == 0xFF) {
-        const ButtonMapping* mapping = findButtonMapping(pData4Mappings, 
-                                                       sizeof(pData4Mappings)/sizeof(ButtonMapping), 
-                                                       prevData4);
-        executeButtonAction(mapping);
+        const ButtonConfig* config = findButtonConfig(4, prevData4);
+        executeButtonAction(config);
     }
 
     // Save current states for next comparison
