@@ -1,0 +1,47 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task: build
+    silent: true
+
+  build:
+    desc: "🔨 Build the project"
+    cmds:
+      - pio run
+
+  upload:
+    desc: "🚀 Build and upload the firmware"
+    cmds:
+      - pio run -t upload
+
+  monitor:
+    desc: "🖥️ Start the serial monitor"
+    cmds:
+      - pio device monitor --baud 115200
+
+  clean:
+    desc: "🧹 Clean up build files"
+    cmds:
+      - pio run -t clean
+
+  test:
+    desc: "🧪 Run tests"
+    cmds:
+      - pio test
+
+  check:
+    desc: "🔍 Perform static code analysis"
+    cmds:
+      - pio check
+
+  install_libs:
+    desc: "📦 Install project libraries"
+    cmds:
+      - pio lib install
+
+  update_libs:
+    desc: "🔄 Update project libraries"
+    cmds:
+      - pio lib update
