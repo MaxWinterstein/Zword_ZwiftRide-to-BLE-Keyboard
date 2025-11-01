@@ -1,3 +1,29 @@
+# Zword_ZwiftRide-to-BLE-Keyboard
+
+## What
+
+This project is based on [Zword_ZwiftRide-to-BLE-Keyboard](https://github.com/Fuenfachsen/Zword_ZwiftRide-to-BLE-Keyboard) by [@Fuenfachsen](https://github.com/Fuenfachsen).
+
+I just migrated it to [PlatformIO](https://platformio.org/) and did some code formatting as well as some little enhancements. Some AI Agents were involved, too.
+
+## Why
+
+PlatformIO feels way more convenient to use, and I had problems getting my cheap ESP32 to work reliably with Arduino IDE. 
+
+My default toolchain relies on `direnv` and `pkgx` to handle all the dependency magic for me, so I don't have to remember everything.
+
+## How
+
+Having PlatformIO around, it should be a simple `pio run` to get this compiled.
+
+All the `pkgx`, `direnv`, `Taskfile` stuff is just to make my life easier. But check it out, its cool!
+
+**Shoutout to all the original developers and everybody involved, they did the most work here.**
+
+
+# _Original README below:_
+
+
 watch a short "trailer" here:
 https://youtu.be/GYDIrvK_Fz0
 

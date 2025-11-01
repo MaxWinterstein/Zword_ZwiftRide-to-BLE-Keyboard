@@ -1,0 +1,14 @@
+# ℹ️ Project Structure
+#
+# This is a **PlatformIO ESP32 project** for embedded development.
+# The Python environment (pyproject.toml/uv) serves as a development convenience wrapper, providing tools and scripts to enhance the build workflow, but the core firmware is built using PlatformIO's toolchain.
+
+[project]
+name = "zword-zwiftride-to-ble-keyboard"
+version = "0.1.0"
+description = "A ESP32 based project to convert button presses on the Zwift Ride controller into BLE keyboard presses. It auto connects to the Zwift Ride controller and advertises as BLE Keyboard."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "platformio>=6.1.18",
+]

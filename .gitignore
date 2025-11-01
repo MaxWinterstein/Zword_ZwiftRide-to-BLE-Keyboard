@@ -1,0 +1,10 @@
+.pio
+/.direnv/
+.venv/
+
+# PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
