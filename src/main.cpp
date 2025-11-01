@@ -16,16 +16,23 @@
 
 // General Options
 bool enableHapticFeedback = false; // Vibration when Zwift Ride button is pressed
+const char* ZWIFT_RIDE_BLUETOOTH_NAME ="Zwift Ride";
 
 // BLE Keyboard initialization
 BleKeyboard bleKeyboard("Zword", "Derguitarjo", 100);
 
 // Zwift Ride Bluetooth UUIDs
-const char* ZWIFT_CUSTOM_SERVICE_UUID = "0000FC82-0000-1000-8000-00805F9B34FB";
+const char* ZWIFT_CUSTOM_SERVICE_UUIDS[] = {
+    "0000FC82-0000-1000-8000-00805F9B34FB", // Older ones
+    "00000001-19CA-4651-86E5-FA29DCDD09D1"  // Newer ones
+};
 const char* ZWIFT_ASYNC_CHARACTERISTIC_UUID = "00000002-19CA-4651-86E5-FA29DCDD09D1"; // Notify
 const char* ZWIFT_SYNC_RX_CHARACTERISTIC_UUID = "00000003-19CA-4651-86E5-FA29DCDD09D1"; // Write Without Response
 const char* ZWIFT_SYNC_TX_CHARACTERISTIC_UUID = "00000004-19CA-4651-86E5-FA29DCDD09D1"; // Indicate, Read
 const char* ZWIFT_Unknown_CHARACTERISTIC_UUID = "00000006-19CA-4651-86E5-FA29DCDD09D1"; // Indicate, Read, Write, Write Without Response
+
+// Global variable to store which service UUID was actually found
+const char* detectedServiceUUID = nullptr;
 
 // =============================================================================
 // BUTTON CONFIGURATION
@@ -342,15 +349,36 @@ public:
         Serial.print(advertisedDevice.getName().c_str());
         Serial.print(" (");
         Serial.print(advertisedDevice.getAddress().toString().c_str());
-        Serial.println(")");
+        Serial.print(") RSSI: ");
+        Serial.print(advertisedDevice.getRSSI());
+        Serial.println(" dBm");
         
-        if (advertisedDevice.haveServiceUUID() && 
-            advertisedDevice.isAdvertisingService(BLEUUID(ZWIFT_CUSTOM_SERVICE_UUID))) {
-            Serial.println("[SCAN] ✓ Found Zwift Ride controller!");
-            BLEDevice::getScan()->stop();
-            myDevice = new BLEAdvertisedDevice(advertisedDevice);
-            doConnect = true;
+        // BLE scan logic using the array
+        for (int i = 0; i < sizeof(ZWIFT_CUSTOM_SERVICE_UUIDS) / sizeof(ZWIFT_CUSTOM_SERVICE_UUIDS[0]); ++i) {
+            if (advertisedDevice.haveName() &&
+                advertisedDevice.getName() == ZWIFT_RIDE_BLUETOOTH_NAME &&
+                advertisedDevice.isAdvertisingService(BLEUUID(ZWIFT_CUSTOM_SERVICE_UUIDS[i]))) {
+
+                Serial.print("[SCAN] ✓ Found Zwift Ride controller with service UUID_");
+                Serial.print(i + 1);
+                Serial.println("!");
+                Serial.print("[SCAN] ✓ Service UUID: ");
+                Serial.println(ZWIFT_CUSTOM_SERVICE_UUIDS[i]);
+
+                detectedServiceUUID = ZWIFT_CUSTOM_SERVICE_UUIDS[i];
+                BLEDevice::getScan()->stop();
+                myDevice = new BLEAdvertisedDevice(advertisedDevice);
+                doConnect = true;
+                break;
+            }
         }
+        
+        // Print the advertised service UUID for debugging
+        if (advertisedDevice.haveServiceUUID()) {
+            Serial.print("[SCAN] Advertised service: ");
+            Serial.println(advertisedDevice.getServiceUUID().toString().c_str());
+        }
+        
     }
 };
 
@@ -400,6 +428,14 @@ bool connectAndHandshakeZwiftRide() {
     Serial.print(connectionAttempts);
     Serial.println(" - Starting BLE Client...");
     
+    if (!detectedServiceUUID) {
+        Serial.println("[ERROR] No Zwift service UUID detected!");
+        return false;
+    }
+    
+    Serial.print("[CONNECT] Using detected service UUID: ");
+    Serial.println(detectedServiceUUID);
+    
     BLEClient* pClient = BLEDevice::createClient();
     Serial.println("[CONNECT] Created BLE client");
 
@@ -413,15 +449,17 @@ bool connectAndHandshakeZwiftRide() {
 
     Serial.println("[CONNECT] ✓ Connected to device");
 
-    // Connect to Controller Service
-    BLERemoteService* pService = pClient->getService(BLEUUID(ZWIFT_CUSTOM_SERVICE_UUID));
+    // Connect to Controller Service using the detected UUID
+    BLERemoteService* pService = pClient->getService(BLEUUID(detectedServiceUUID));
     if (pService == nullptr) {
-        Serial.println("[ERROR] Zwift service not found");
+        Serial.print("[ERROR] Zwift service not found with UUID: ");
+        Serial.println(detectedServiceUUID);
         pClient->disconnect();
         return false;
     }
 
-    Serial.println("[CONNECT] ✓ Found Zwift service");
+    Serial.print("[CONNECT] ✓ Found Zwift service with UUID: ");
+    Serial.println(detectedServiceUUID);
 
     // Send handshake message to RX Characteristic
     Serial.println("[HANDSHAKE] Sending handshake...");
